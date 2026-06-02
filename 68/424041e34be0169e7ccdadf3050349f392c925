@@ -1,0 +1,22 @@
+Windows/NETenderDemo/ui/mainwindow.cpp
+  s_df02d9a6ec452d::t_9309edd06ec456 1653-1654
+  s_df02d9a6ec452d::t_18125640a74317 1718-1719
+Windows/NETenderDemo/NETender_Windows_SDK/netender-sdk/runtime/index.js
+  s_df02d9a6ec452d::t_94e1ac2f9bb9e6 63-65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "68424041e34be0169e7ccdadf3050349f392c925",
+  "prompts": {},
+  "sessions": {
+    "s_df02d9a6ec452d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e864f-e595-7b61-8c9f-f03c70d2c02c",
+        "model": "gpt-5.5"
+      },
+      "human_author": "高琦 <hzgaoqi1@corp.netease.com>"
+    }
+  }
+}
