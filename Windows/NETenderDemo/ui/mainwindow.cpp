@@ -1650,6 +1650,9 @@ void MainWindow::initializeSDK() {
         return;
     }
 
+    const char* sdkVersion = NETender_GetVersion();
+    logMessage(QString("NETender SDK version: %1").arg(sdkVersion ? sdkVersion : "unknown"));
+
     QString appKey = appKeyEdit->text().trimmed();
     QString serverUrl = serverUrlEdit->text().trimmed();
     QString locale = localeCombo->currentText();
@@ -1712,7 +1715,8 @@ void MainWindow::initializeSDK() {
         securityManager = NETender_GetSecurityManager(sdkHandle);
         waitingRoomManager = NETender_GetWaitingRoomManager(sdkHandle);
 
-        logMessage("SDK初始化成功");
+        sdkVersion = NETender_GetVersion();
+        logMessage(QString("SDK初始化成功，版本: %1").arg(sdkVersion ? sdkVersion : "unknown"));
     } else {
         logMessage(QString("SDK初始化失败，错误代码: %1").arg(result));
     }

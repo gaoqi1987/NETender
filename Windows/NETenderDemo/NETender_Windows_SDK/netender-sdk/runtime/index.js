@@ -60,6 +60,9 @@ const NERoom = require("./neroom-kit-node/dist/index.cjs.js");
 const { NETenderWebSDK } = require("./netender-web-sdk/dist/index.cjs.js");
 
 const roomkit = new NERoom();
+roomkit._im = roomkit._im || {};
+roomkit._im.nim = roomkit._im.nim || {};
+roomkit._im.nim.logger = roomkit._im.nim.logger || console;
 
 neTenderMeeting = NETenderWebSDK.getInstance({
   roomkit,

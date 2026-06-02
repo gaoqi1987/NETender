@@ -121,12 +121,12 @@ typedef struct NETenderMessageChannelListener_T* NETenderMessageChannelListenerH
 // ==================== Version Information ====================
 
 #define NETENDER_VERSION_MAJOR 1
-#define NETENDER_VERSION_MINOR 0
-#define NETENDER_VERSION_PATCH 0
+#define NETENDER_VERSION_MINOR 1
+#define NETENDER_VERSION_PATCH 1
 
 /**
  * @brief Get SDK version string
- * @return Version string (e.g., "1.0.0")
+ * @return Version string (e.g., "1.1.1")
  */
 NETENDER_API const char* NETender_GetVersion(void);
 
