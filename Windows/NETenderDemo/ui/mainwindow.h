@@ -159,6 +159,7 @@ private slots:
 private:
     void setupUI();
     void setupSDKCallbacks();
+    void unregisterSDKCallbacks();
 
     // UI组件
     QTabWidget* mainTabWidget;
@@ -296,6 +297,15 @@ private:
     NETenderSecurityManagerHandle securityManager;
     NETenderWaitingRoomManagerHandle waitingRoomManager;
 
+    NETenderGlobalEventListener globalEventListener;
+    NETenderMeetingListener meetingListener;
+    NETenderMessageChannelListener messageChannelListener;
+    NETenderWaitingRoomListener waitingRoomListener;
+    bool globalEventListenerRegistered;
+    bool meetingListenerRegistered;
+    bool messageChannelListenerRegistered;
+    bool waitingRoomListenerRegistered;
+
     // 初始化选项卡
     QWidget* setupInitTab();
     QWidget* setupAccountTab();
@@ -322,6 +332,47 @@ private:
     static void scheduledMemberCallback(int32_t code, const char* message, NETenderScheduledMember* members, int32_t count, void* user_data);
     static void chatroomPermissionCallback(int32_t code, const char* message, NETenderChatroomPermission* permission, void* user_data);
     static void waitingRoomMemberCallback(int32_t code, const char* message, NETenderWaitingRoomMember* members, int32_t count, void* user_data);
+
+    static void postListenerLog(void* user_data, const QString& message);
+    static QString safeText(const char* text, const QString& fallback = QStringLiteral("未知"));
+    static QString boolStateText(int32_t enabled);
+    static QString memberSummary(const NETenderMemberInfo* member);
+    static QString chatMessageSummary(const NETenderRoomChatMessage* message);
+
+    static void onBeforeRtcEngineInitialize(const char* room_uuid, void* user_data);
+    static void onAfterRtcEngineInitialize(const char* room_uuid, void* user_data);
+    static void onBeforeRtcEngineRelease(const char* room_uuid, void* user_data);
+
+    static void onMeetingStatusChanged(int32_t status, void* user_data);
+    static void onMemberJoined(const NETenderMemberInfo* member, void* user_data);
+    static void onMemberLeft(const NETenderMemberInfo* member, void* user_data);
+    static void onHostChanged(const char* host_uuid, void* user_data);
+    static void onMemberAudioMuteChanged(const char* user_uuid, int32_t muted, void* user_data);
+    static void onMemberVideoMuteChanged(const char* user_uuid, int32_t muted, void* user_data);
+    static void onRoomEnded(const char* reason, const char* extra, void* user_data);
+    static void onMemberAudioConnectStateChanged(const NETenderMemberInfo* member, int32_t is_audio_connected, void* user_data);
+    static void onMemberJoinChatroom(const NETenderMemberInfo* members, uint32_t count, void* user_data);
+    static void onMemberLeaveChatroom(const NETenderMemberInfo* members, uint32_t count, void* user_data);
+    static void onMemberScreenShareStateChanged(
+        const NETenderMemberInfo* member, int32_t is_sharing, const NETenderMemberInfo* operate_by, void* user_data);
+    static void onReceiveChatroomMessages(const NETenderRoomChatMessage* messages, uint32_t count, void* user_data);
+    static void onMemberChatBanStateChanged(
+        const NETenderMemberInfo* member, int32_t banned, int32_t duration, const char* notify_ext, const NETenderMemberInfo* operate_by, void* user_data);
+
+    static void onCustomMessageReceived(const NETenderCustomMessage* message, void* user_data);
+    static void onSessionMessageReceived(const NETenderCustomSessionMessage* data, void* user_data);
+    static void onSessionMessageRecentChanged(const NETenderRecentSession* sessions, uint32_t count, void* user_data);
+    static void onSessionMessageDeleted(const NETenderCustomSessionMessage* data, void* user_data);
+    static void onDeleteAllSessionMessage(const char* session_id, int32_t session_type, void* user_data);
+
+    static void onWaitingRoomMemberJoin(const NETenderWaitingRoomMember* member, int32_t reason, void* user_data);
+    static void onWaitingRoomMemberLeave(const char* user_uuid, int32_t reason, void* user_data);
+    static void onWaitingRoomMemberAdmitted(const char* user_uuid, void* user_data);
+    static void onWaitingRoomMyStatusChanged(int32_t status, int32_t reason, void* user_data);
+    static void onWaitingRoomMemberNameChanged(const char* user_uuid, const char* name, const NETenderMemberInfo* operate_by, void* user_data);
+    static void onWaitingRoomInfoUpdated(const NETenderWaitingRoomInfo* info, void* user_data);
+    static void onWaitingRoomAllMembersKicked(void* user_data);
+    static void onWaitingRoomManagersUpdated(const NETenderMemberInfo* managers, uint32_t count, void* user_data);
 
     // 回调数据结构
     struct CallbackData {

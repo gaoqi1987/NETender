@@ -80,7 +80,11 @@ MainWindow::MainWindow(QWidget* parent)
     , subscribeSubStreamUserIdEdit(nullptr)
     , unsubscribeSubStreamUserIdEdit(nullptr)
     , streamTypeCombo(nullptr)
-    , enableAIDenoiseCheck(nullptr) {
+    , enableAIDenoiseCheck(nullptr)
+    , globalEventListenerRegistered(false)
+    , meetingListenerRegistered(false)
+    , messageChannelListenerRegistered(false)
+    , waitingRoomListenerRegistered(false) {
     setWindowTitle("NETender Example");
     resize(1200, 800);
 
@@ -267,6 +271,363 @@ void MainWindow::searchLog(const QString& searchText) {
     } else {
         logMessage(QString("未找到: %1").arg(searchText));
     }
+}
+
+void MainWindow::setupSDKCallbacks() {
+    if (!sdkInitialized) {
+        return;
+    }
+
+    if (!globalEventListenerRegistered) {
+        globalEventListener = NETenderGlobalEventListener{};
+        globalEventListener.before_rtc_engine_initialize = &MainWindow::onBeforeRtcEngineInitialize;
+        globalEventListener.after_rtc_engine_initialize = &MainWindow::onAfterRtcEngineInitialize;
+        globalEventListener.before_rtc_engine_release = &MainWindow::onBeforeRtcEngineRelease;
+        globalEventListener.user_data = this;
+
+        int32_t result = NETender_AddGlobalEventListener(&globalEventListener);
+        if (result == 0) {
+            globalEventListenerRegistered = true;
+            logMessage("已注册全局事件监听回调示例");
+        } else {
+            logMessage(QString("注册全局事件监听失败，错误代码: %1").arg(result));
+        }
+    }
+
+    if (meetingManager && !meetingListenerRegistered) {
+        meetingListener = NETenderMeetingListener{};
+        meetingListener.on_meeting_status_changed = &MainWindow::onMeetingStatusChanged;
+        meetingListener.on_member_joined = &MainWindow::onMemberJoined;
+        meetingListener.on_member_left = &MainWindow::onMemberLeft;
+        meetingListener.on_host_changed = &MainWindow::onHostChanged;
+        meetingListener.on_member_audio_mute_changed = &MainWindow::onMemberAudioMuteChanged;
+        meetingListener.on_member_video_mute_changed = &MainWindow::onMemberVideoMuteChanged;
+        meetingListener.on_room_ended = &MainWindow::onRoomEnded;
+        meetingListener.on_member_audio_connect_state_changed = &MainWindow::onMemberAudioConnectStateChanged;
+        meetingListener.on_member_join_chatroom = &MainWindow::onMemberJoinChatroom;
+        meetingListener.on_member_leave_chatroom = &MainWindow::onMemberLeaveChatroom;
+        meetingListener.on_member_screen_share_state_changed = &MainWindow::onMemberScreenShareStateChanged;
+        meetingListener.on_receive_chatroom_messages = &MainWindow::onReceiveChatroomMessages;
+        meetingListener.on_member_chat_ban_state_changed = &MainWindow::onMemberChatBanStateChanged;
+        meetingListener.user_data = this;
+
+        int32_t result = NETender_Meeting_AddMeetingListener(meetingManager, &meetingListener);
+        if (result == 0) {
+            meetingListenerRegistered = true;
+            logMessage("已注册会议事件监听回调示例");
+        } else {
+            logMessage(QString("注册会议事件监听失败，错误代码: %1").arg(result));
+        }
+    }
+
+    if (meetingManager && !messageChannelListenerRegistered) {
+        messageChannelListener = NETenderMessageChannelListener{};
+        messageChannelListener.on_custom_message_received = &MainWindow::onCustomMessageReceived;
+        messageChannelListener.on_session_message_received = &MainWindow::onSessionMessageReceived;
+        messageChannelListener.on_session_message_recent_changed = &MainWindow::onSessionMessageRecentChanged;
+        messageChannelListener.on_session_message_deleted = &MainWindow::onSessionMessageDeleted;
+        messageChannelListener.on_delete_all_session_message = &MainWindow::onDeleteAllSessionMessage;
+        messageChannelListener.user_data = this;
+
+        int32_t result = NETender_Meeting_AddMessageChannelListener(meetingManager, &messageChannelListener);
+        if (result == 0) {
+            messageChannelListenerRegistered = true;
+            logMessage("已注册消息通道事件监听回调示例");
+        } else {
+            logMessage(QString("注册消息通道事件监听失败，错误代码: %1").arg(result));
+        }
+    }
+
+    if (waitingRoomManager && !waitingRoomListenerRegistered) {
+        waitingRoomListener = NETenderWaitingRoomListener{};
+        waitingRoomListener.on_member_join = &MainWindow::onWaitingRoomMemberJoin;
+        waitingRoomListener.on_member_leave = &MainWindow::onWaitingRoomMemberLeave;
+        waitingRoomListener.on_member_admitted = &MainWindow::onWaitingRoomMemberAdmitted;
+        waitingRoomListener.on_my_status_changed = &MainWindow::onWaitingRoomMyStatusChanged;
+        waitingRoomListener.on_member_name_changed = &MainWindow::onWaitingRoomMemberNameChanged;
+        waitingRoomListener.on_info_updated = &MainWindow::onWaitingRoomInfoUpdated;
+        waitingRoomListener.on_all_members_kicked = &MainWindow::onWaitingRoomAllMembersKicked;
+        waitingRoomListener.on_managers_updated = &MainWindow::onWaitingRoomManagersUpdated;
+        waitingRoomListener.user_data = this;
+
+        int32_t result = NETender_WaitingRoom_AddListener(waitingRoomManager, &waitingRoomListener);
+        if (result == 0) {
+            waitingRoomListenerRegistered = true;
+            logMessage("已注册等候室事件监听回调示例");
+        } else {
+            logMessage(QString("注册等候室事件监听失败，错误代码: %1").arg(result));
+        }
+    }
+
+    logMessage("非高频回调注册流程已完成；RTC 统计等高频回调示例未在 UI 中持续打印");
+}
+
+void MainWindow::unregisterSDKCallbacks() {
+    if (waitingRoomListenerRegistered && waitingRoomManager) {
+        int32_t result = NETender_WaitingRoom_RemoveListener(waitingRoomManager, &waitingRoomListener);
+        if (result == 0) {
+            waitingRoomListenerRegistered = false;
+        } else {
+            logMessage(QString("移除等候室事件监听失败，错误代码: %1").arg(result));
+        }
+    }
+
+    if (messageChannelListenerRegistered && meetingManager) {
+        int32_t result = NETender_Meeting_RemoveMessageChannelListener(meetingManager, &messageChannelListener);
+        if (result == 0) {
+            messageChannelListenerRegistered = false;
+        } else {
+            logMessage(QString("移除消息通道事件监听失败，错误代码: %1").arg(result));
+        }
+    }
+
+    if (meetingListenerRegistered && meetingManager) {
+        int32_t result = NETender_Meeting_RemoveMeetingListener(meetingManager, &meetingListener);
+        if (result == 0) {
+            meetingListenerRegistered = false;
+        } else {
+            logMessage(QString("移除会议事件监听失败，错误代码: %1").arg(result));
+        }
+    }
+
+    if (globalEventListenerRegistered) {
+        int32_t result = NETender_RemoveGlobalEventListener(&globalEventListener);
+        if (result == 0) {
+            globalEventListenerRegistered = false;
+        } else {
+            logMessage(QString("移除全局事件监听失败，错误代码: %1").arg(result));
+        }
+    }
+}
+
+void MainWindow::postListenerLog(void* user_data, const QString& message) {
+    MainWindow* window = static_cast<MainWindow*>(user_data);
+    if (!window) {
+        return;
+    }
+
+    QMetaObject::invokeMethod(window, "logMessage", Qt::QueuedConnection, Q_ARG(QString, QString("[回调] %1").arg(message)));
+}
+
+QString MainWindow::safeText(const char* text, const QString& fallback) {
+    return text && text[0] != '\0' ? QString::fromUtf8(text) : fallback;
+}
+
+QString MainWindow::boolStateText(int32_t enabled) {
+    if (enabled == 1) {
+        return "是";
+    }
+    if (enabled == 0) {
+        return "否";
+    }
+    return QString("未知(%1)").arg(enabled);
+}
+
+QString MainWindow::memberSummary(const NETenderMemberInfo* member) {
+    if (!member) {
+        return "未知成员";
+    }
+
+    return QString("uuid=%1 name=%2").arg(safeText(member->uuid)).arg(safeText(member->name));
+}
+
+QString MainWindow::chatMessageSummary(const NETenderRoomChatMessage* message) {
+    if (!message) {
+        return "未知消息";
+    }
+
+    return QString("fromUuid=%1 fromName=%2 type=%3")
+        .arg(safeText(message->from_user_uuid))
+        .arg(safeText(message->from_nick))
+        .arg(static_cast<int>(message->message_type));
+}
+
+void MainWindow::onBeforeRtcEngineInitialize(const char* room_uuid, void* user_data) {
+    postListenerLog(user_data, QString("全局事件 beforeRtcEngineInitialize, roomUuid=%1").arg(safeText(room_uuid)));
+}
+
+void MainWindow::onAfterRtcEngineInitialize(const char* room_uuid, void* user_data) {
+    postListenerLog(user_data, QString("全局事件 afterRtcEngineInitialize, roomUuid=%1").arg(safeText(room_uuid)));
+}
+
+void MainWindow::onBeforeRtcEngineRelease(const char* room_uuid, void* user_data) {
+    postListenerLog(user_data, QString("全局事件 beforeRtcEngineRelease, roomUuid=%1").arg(safeText(room_uuid)));
+}
+
+void MainWindow::onMeetingStatusChanged(int32_t status, void* user_data) {
+    postListenerLog(user_data, QString("会议状态回调 onMeetingStatusChanged, status=%1").arg(status));
+}
+
+void MainWindow::onMemberJoined(const NETenderMemberInfo* member, void* user_data) {
+    postListenerLog(user_data, QString("会议事件 onMemberJoined, member=%1").arg(memberSummary(member)));
+}
+
+void MainWindow::onMemberLeft(const NETenderMemberInfo* member, void* user_data) {
+    postListenerLog(user_data, QString("会议事件 onMemberLeft, member=%1").arg(memberSummary(member)));
+}
+
+void MainWindow::onHostChanged(const char* host_uuid, void* user_data) {
+    postListenerLog(user_data, QString("会议事件 onHostChanged, hostUuid=%1").arg(safeText(host_uuid)));
+}
+
+void MainWindow::onMemberAudioMuteChanged(const char* user_uuid, int32_t muted, void* user_data) {
+    postListenerLog(user_data, QString("会议事件 onMemberAudioMuteChanged, userUuid=%1, muted=%2").arg(safeText(user_uuid)).arg(boolStateText(muted)));
+}
+
+void MainWindow::onMemberVideoMuteChanged(const char* user_uuid, int32_t muted, void* user_data) {
+    postListenerLog(user_data, QString("会议事件 onMemberVideoMuteChanged, userUuid=%1, muted=%2").arg(safeText(user_uuid)).arg(boolStateText(muted)));
+}
+
+void MainWindow::onRoomEnded(const char* reason, const char* extra, void* user_data) {
+    Q_UNUSED(extra);
+    postListenerLog(user_data, QString("会议事件 onRoomEnded, reason=%1").arg(safeText(reason)));
+}
+
+void MainWindow::onMemberAudioConnectStateChanged(const NETenderMemberInfo* member, int32_t is_audio_connected, void* user_data) {
+    postListenerLog(user_data,
+        QString("会议事件 onMemberAudioConnectStateChanged, member=%1, connected=%2").arg(memberSummary(member)).arg(boolStateText(is_audio_connected)));
+}
+
+void MainWindow::onMemberJoinChatroom(const NETenderMemberInfo* members, uint32_t count, void* user_data) {
+    QString firstMember = count > 0 ? memberSummary(members) : "无";
+    postListenerLog(user_data, QString("会议事件 onMemberJoinChatroom, count=%1, first=%2").arg(count).arg(firstMember));
+}
+
+void MainWindow::onMemberLeaveChatroom(const NETenderMemberInfo* members, uint32_t count, void* user_data) {
+    QString firstMember = count > 0 ? memberSummary(members) : "无";
+    postListenerLog(user_data, QString("会议事件 onMemberLeaveChatroom, count=%1, first=%2").arg(count).arg(firstMember));
+}
+
+void MainWindow::onMemberScreenShareStateChanged(
+    const NETenderMemberInfo* member, int32_t is_sharing, const NETenderMemberInfo* operate_by, void* user_data) {
+    postListenerLog(user_data,
+        QString("会议事件 onMemberScreenShareStateChanged, member=%1, sharing=%2, op=%3")
+            .arg(memberSummary(member))
+            .arg(boolStateText(is_sharing))
+            .arg(memberSummary(operate_by)));
+}
+
+void MainWindow::onReceiveChatroomMessages(const NETenderRoomChatMessage* messages, uint32_t count, void* user_data) {
+    QString firstMessage = count > 0 ? chatMessageSummary(messages) : "无";
+    postListenerLog(user_data, QString("会议事件 onReceiveChatroomMessages, count=%1, first=%2").arg(count).arg(firstMessage));
+}
+
+void MainWindow::onMemberChatBanStateChanged(
+    const NETenderMemberInfo* member, int32_t banned, int32_t duration, const char* notify_ext, const NETenderMemberInfo* operate_by, void* user_data) {
+    Q_UNUSED(notify_ext);
+    postListenerLog(user_data,
+        QString("会议事件 onMemberChatBanStateChanged, member=%1, banned=%2, duration=%3, op=%4")
+            .arg(memberSummary(member))
+            .arg(boolStateText(banned))
+            .arg(duration)
+            .arg(memberSummary(operate_by)));
+}
+
+void MainWindow::onCustomMessageReceived(const NETenderCustomMessage* message, void* user_data) {
+    Q_UNUSED(message);
+    Q_UNUSED(user_data);
+    // C API currently does not expose commandId/type/source. RoomKit internal
+    // commands can arrive here, so the demo avoids UI logging for this callback.
+}
+
+void MainWindow::onSessionMessageReceived(const NETenderCustomSessionMessage* data, void* user_data) {
+    if (!data) {
+        postListenerLog(user_data, "消息通道 onSessionMessageReceived, data=空");
+        return;
+    }
+
+    QString log = QString("消息通道 onSessionMessageReceived, sessionId=%1, sessionType=%2, messageId=%3")
+                      .arg(safeText(data->sessionId))
+                      .arg(data->sessionType)
+                      .arg(safeText(data->messageId, "空"));
+    if (data->timestamp > 0) {
+        log += QString(", timestamp=%1").arg(data->timestamp);
+    }
+    postListenerLog(user_data, log);
+}
+
+void MainWindow::onSessionMessageRecentChanged(const NETenderRecentSession* sessions, uint32_t count, void* user_data) {
+    QString firstSession = "无";
+    if (sessions && count > 0) {
+        firstSession = QString("sessionId=%1, sessionType=%2, unread=%3")
+                           .arg(safeText(sessions[0].sessionId))
+                           .arg(sessions[0].sessionType)
+                           .arg(sessions[0].unreadCount);
+    }
+    postListenerLog(user_data, QString("消息通道 onSessionMessageRecentChanged, count=%1, first=%2").arg(count).arg(firstSession));
+}
+
+void MainWindow::onSessionMessageDeleted(const NETenderCustomSessionMessage* data, void* user_data) {
+    if (!data) {
+        postListenerLog(user_data, "消息通道 onSessionMessageDeleted, data=空");
+        return;
+    }
+
+    postListenerLog(user_data,
+        QString("消息通道 onSessionMessageDeleted, sessionId=%1, sessionType=%2, messageId=%3")
+            .arg(safeText(data->sessionId))
+            .arg(data->sessionType)
+            .arg(safeText(data->messageId)));
+}
+
+void MainWindow::onDeleteAllSessionMessage(const char* session_id, int32_t session_type, void* user_data) {
+    postListenerLog(user_data,
+        QString("消息通道 onDeleteAllSessionMessage, sessionId=%1, sessionType=%2").arg(safeText(session_id)).arg(session_type));
+}
+
+void MainWindow::onWaitingRoomMemberJoin(const NETenderWaitingRoomMember* member, int32_t reason, void* user_data) {
+    if (!member) {
+        postListenerLog(user_data, QString("等候室事件 onMemberJoin, member=空, reason=%1").arg(reason));
+        return;
+    }
+
+    postListenerLog(user_data,
+        QString("等候室事件 onMemberJoin, userUuid=%1, name=%2, status=%3, reason=%4")
+            .arg(safeText(member->user_uuid))
+            .arg(safeText(member->user_name))
+            .arg(member->status)
+            .arg(reason));
+}
+
+void MainWindow::onWaitingRoomMemberLeave(const char* user_uuid, int32_t reason, void* user_data) {
+    postListenerLog(user_data, QString("等候室事件 onMemberLeave, userUuid=%1, reason=%2").arg(safeText(user_uuid)).arg(reason));
+}
+
+void MainWindow::onWaitingRoomMemberAdmitted(const char* user_uuid, void* user_data) {
+    postListenerLog(user_data, QString("等候室事件 onMemberAdmitted, userUuid=%1").arg(safeText(user_uuid)));
+}
+
+void MainWindow::onWaitingRoomMyStatusChanged(int32_t status, int32_t reason, void* user_data) {
+    postListenerLog(user_data, QString("等候室状态回调 onMyStatusChanged, status=%1, reason=%2").arg(status).arg(reason));
+}
+
+void MainWindow::onWaitingRoomMemberNameChanged(const char* user_uuid, const char* name, const NETenderMemberInfo* operate_by, void* user_data) {
+    postListenerLog(user_data,
+        QString("等候室事件 onMemberNameChanged, userUuid=%1, name=%2, op=%3")
+            .arg(safeText(user_uuid))
+            .arg(safeText(name))
+            .arg(memberSummary(operate_by)));
+}
+
+void MainWindow::onWaitingRoomInfoUpdated(const NETenderWaitingRoomInfo* info, void* user_data) {
+    if (!info) {
+        postListenerLog(user_data, "等候室事件 onInfoUpdated, info=空");
+        return;
+    }
+
+    postListenerLog(user_data,
+        QString("等候室事件 onInfoUpdated, memberCount=%1, enabled=%2")
+            .arg(info->member_count)
+            .arg(boolStateText(info->is_enabled)));
+}
+
+void MainWindow::onWaitingRoomAllMembersKicked(void* user_data) {
+    postListenerLog(user_data, "等候室事件 onAllMembersKicked");
+}
+
+void MainWindow::onWaitingRoomManagersUpdated(const NETenderMemberInfo* managers, uint32_t count, void* user_data) {
+    QString firstManager = count > 0 ? memberSummary(managers) : "无";
+    postListenerLog(user_data, QString("等候室事件 onManagersUpdated, count=%1, first=%2").arg(count).arg(firstManager));
 }
 
 void MainWindow::asyncCallback(int32_t code, const char* message, void* user_data) {
@@ -1717,6 +2078,7 @@ void MainWindow::initializeSDK() {
 
         sdkVersion = NETender_GetVersion();
         logMessage(QString("SDK初始化成功，版本: %1").arg(sdkVersion ? sdkVersion : "unknown"));
+        setupSDKCallbacks();
     } else {
         logMessage(QString("SDK初始化失败，错误代码: %1").arg(result));
     }
@@ -1727,6 +2089,8 @@ void MainWindow::uninitializeSDK() {
         logMessage("SDK未初始化");
         return;
     }
+
+    unregisterSDKCallbacks();
 
     int32_t result = NETender_Uninitialize();
 
@@ -1744,6 +2108,10 @@ void MainWindow::uninitializeSDK() {
         preMeetingManager = nullptr;
         securityManager = nullptr;
         waitingRoomManager = nullptr;
+        globalEventListenerRegistered = false;
+        meetingListenerRegistered = false;
+        messageChannelListenerRegistered = false;
+        waitingRoomListenerRegistered = false;
 
         logMessage("SDK反初始化成功");
     } else {
