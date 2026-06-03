@@ -1,0 +1,24 @@
+Windows/NETenderDemo/ui/mainwindow.cpp
+  s_deccc4c527a7d7::t_ec995b83623879 83-87,280-361,364-425,438,445-480,485-500,509-512,531,538,548-603,611-617,623-632,2081,2093-2094,2111-2114
+  s_deccc4c527a7d7::t_f842734c7eed42 276-279,362-363,426-437,439-444,481-484,501-508,513-530,532-537,539-547,604-610,618-622
+Windows/NETenderDemo/ui/mainwindow.h
+  s_deccc4c527a7d7::t_3b1d504a6acf0d 162
+  s_deccc4c527a7d7::t_0aa991f436f902 300-308,337-376
+  s_deccc4c527a7d7::t_d885d57af0c137 336
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "5ef914c51603fbd40f1bc8a07041e2d2550031a8",
+  "prompts": {},
+  "sessions": {
+    "s_deccc4c527a7d7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e8b32-fece-7013-8976-96eab75fe176",
+        "model": "gpt-5.5"
+      },
+      "human_author": "高琦 <hzgaoqi1@corp.netease.com>"
+    }
+  }
+}
